@@ -154,7 +154,7 @@
             <div>
                 <h3 id="question-text">Question goes here</h3>
                 <textarea id="sql-editor"></textarea>
-                <button onclick="runQuery()" style="margin-top: 10px;">Run Query</button>
+                <button onclick="runQuery()" style="margin-top: 10px;">Run Query (Cmd/Ctrl + Enter)</button>
                 <div id="feedback"></div>
             </div>
         </div>
@@ -217,7 +217,11 @@
                 mode: "text/x-sql",
                 theme: "dracula",
                 lineNumbers: true,
-                viewportMargin: Infinity
+                viewportMargin: Infinity,
+                extraKeys: {
+                    "Cmd-Enter": function(cm) { runQuery(); },
+                    "Ctrl-Enter": function(cm) { runQuery(); }
+                }
             });
         };
 
@@ -260,7 +264,10 @@
             loadQuestion();
             
             // Refresh editor rendering since it was hidden
-            setTimeout(() => editor.refresh(), 10);
+            setTimeout(() => {
+                editor.refresh();
+                editor.focus(); // Automatically put the cursor in the editor!
+            }, 10);
 
             timerInterval = setInterval(() => {
                 timeLeft--;
