@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Quiz</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/sql/sql.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/alasql@4"></script>
+
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --bg: #1e1e1e;
+            --text: #ffffff;
+            --panel: #2d2d2d;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin-top: 0; }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--panel);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #45a049; }
+        
+        /* Game Screen Layout */
+        #game-screen { display: none; width: 100%; text-align: left; }
+        .header-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+        .timer { color: #ff5252; transition: color 0.3s; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            color: #000;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        th, td { padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f4f4f4; }
+        
+        /* Editor */
+        .CodeMirror {
+            height: 150px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        #feedback { margin-top: 10px; font-weight: bold; min-height: 24px; }
+        .success { color: #4CAF50; }
+        .error { color: #ff5252; }
+
+        /* Cheat Sheet */
+        #cheat-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #2196F3;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            transition: background-color 0.3s;
+            z-index: 1000;
+        }
+        #cheat-btn:hover {
+            background-color: #1976D2;
+        }
+        #cheat-modal {
+            display: none;
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            background: var(--panel);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            width: 320px;
+            z-index: 1000;
+        }
+        #cheat-modal h3 { margin-top: 0; }
+        #cheat-modal code { color: #4CAF50; font-weight: bold; }
+        #cheat-modal ul { padding-left: 20px; margin: 0; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="start-screen">
+        <h1>SQL Quiz</h1>
+        <p>You have 2 minutes to answer 5 SQL questions based on a small dataset.</p>
+        <button onclick="startGame()">Start Game</button>
+    </div>
+
+    <div class="container" id="game-screen">
+        <div class="header-stats">
+            <span id="question-tracker">Question: 1 / 5</span>
+            <span class="timer" id="timer-display">Time: <span id="time-left">120</span>s</span>
+        </div>
+
+        <div class="grid">
+            <div>
+                <h3>Table: <code>employees</code></h3>
+                <div id="data-table"></div>
+            </div>
+
+            <div>
+                <h3 id="question-text">Question goes here</h3>
+                <textarea id="sql-editor"></textarea>
+                <button onclick="runQuery()" style="margin-top: 10px;">Run Query</button>
+                <div id="feedback"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="end-screen" style="display: none;">
+        <h1 id="end-title">Game Over!</h1>
+        <p id="end-message"></p>
+        <button onclick="resetGame()">Play Again</button>
+    </div>
+
+    <button id="cheat-btn" onclick="toggleCheatSheet()">SQL Cheat Sheet</button>
+    <div id="cheat-modal">
+        <h3>SQL Cheat Sheet</h3>
+        <ul>
+            <li><code>SELECT</code>: Extracts data from a database</li>
+            <li><code>FROM</code>: Specifies the table to query</li>
+            <li><code>WHERE</code>: Filters records by a condition</li>
+            <li><code>ORDER BY</code>: Sorts the result-set</li>
+            <li><code>ASC</code> / <code>DESC</code>: Ascending / Descending order</li>
+            <li><code>GROUP BY</code>: Groups rows with identical values</li>
+            <li><code>COUNT()</code>: Returns the number of rows</li>
+            <li><code>SUM()</code>: Returns the total sum of a column</li>
+            <li><code>AS</code>: Temporarily renames a column or table</li>
+        </ul>
+    </div>
+
+    <script>
+        // Game State
+        let timerInterval;
+        let timeLeft = 120;
+        let currentQuestionIndex = 0;
+        let editor;
+
+        // Setup Database
+        function initDatabase() {
+            alasql('DROP TABLE IF EXISTS employees');
+            alasql('CREATE TABLE employees (id INT, name STRING, department STRING, salary INT)');
+            alasql(`INSERT INTO employees VALUES 
+                (1, 'Alice', 'IT', 70000),
+                (2, 'Bob', 'Sales', 60000),
+                (3, 'Charlie', 'IT', 80000),
+                (4, 'Diana', 'HR', 65000),
+                (5, 'Evan', 'Sales', 75000)
+            `);
+        }
+
+        // Questions Data
+        const questions = [
+            { text: "Select all columns for all employees.", answer: "SELECT * FROM employees" },
+            { text: "Select only the names of employees in the 'IT' department.", answer: "SELECT name FROM employees WHERE department = 'IT'" },
+            { text: "Find the total salary of all employees (alias it as 'total_salary').", answer: "SELECT SUM(salary) AS total_salary FROM employees" },
+            { text: "Select all employees ordered by salary from highest to lowest.", answer: "SELECT * FROM employees ORDER BY salary DESC" },
+            { text: "Count how many employees are in each department. Return department and the count (alias as 'emp_count').", answer: "SELECT department, COUNT(id) AS emp_count FROM employees GROUP BY department" }
+        ];
+
+        // UI Initialization
+        window.onload = function() {
+            editor = CodeMirror.fromTextArea(document.getElementById("sql-editor"), {
+                mode: "text/x-sql",
+                theme: "dracula",
+                lineNumbers: true,
+                viewportMargin: Infinity
+            });
+        };
+
+        function renderTable() {
+            const data = alasql('SELECT * FROM employees');
+            if (data.length === 0) return;
+            
+            let html = '<table><tr>';
+            Object.keys(data[0]).forEach(key => html += `<th>${key}</th>`);
+            html += '</tr>';
+            
+            data.forEach(row => {
+                html += '<tr>';
+                Object.values(row).forEach(val => html += `<td>${val}</td>`);
+                html += '</tr>';
+            });
+            html += '</table>';
+            document.getElementById('data-table').innerHTML = html;
+        }
+
+        function loadQuestion() {
+            document.getElementById('question-tracker').innerText = `Question: ${currentQuestionIndex + 1} / 5`;
+            document.getElementById('question-text').innerText = questions[currentQuestionIndex].text;
+            editor.setValue("");
+            document.getElementById('feedback').innerText = "";
+        }
+
+        // Game Mechanics
+        function startGame() {
+            initDatabase();
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('end-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            
+            currentQuestionIndex = 0;
+            timeLeft = 120;
+            document.getElementById('time-left').innerText = timeLeft;
+            
+            renderTable();
+            loadQuestion();
+            
+            // Refresh editor rendering since it was hidden
+            setTimeout(() => editor.refresh(), 10);
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('time-left').innerText = timeLeft;
+                if (timeLeft <= 0) endGame(false);
+            }, 1000);
+        }
+
+        function runQuery() {
+            const userQuery = editor.getValue().trim();
+            const feedback = document.getElementById('feedback');
+            
+            if (!userQuery) {
+                feedback.innerHTML = '<span class="error">Please enter a SQL statement.</span>';
+                return;
+            }
+
+            try {
+                // Get the expected answer using the predefined correct query
+                const expectedResult = alasql(questions[currentQuestionIndex].answer);
+                // Run the user's query
+                const userResult = alasql(userQuery);
+
+                // Compare results
+                if (JSON.stringify(expectedResult) === JSON.stringify(userResult)) {
+                    feedback.innerHTML = '<span class="success">Correct! Moving to next question...</span>';
+                    
+                    setTimeout(() => {
+                        currentQuestionIndex++;
+                        if (currentQuestionIndex >= questions.length) {
+                            endGame(true);
+                        } else {
+                            loadQuestion();
+                        }
+                    }, 1200);
+                } else {
+                    feedback.innerHTML = '<span class="error">Incorrect result. Try again!</span>';
+                }
+            } catch (err) {
+                // Catch SQL syntax errors
+                feedback.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+            }
+        }
+
+        function endGame(won) {
+            clearInterval(timerInterval);
+            document.getElementById('game-screen').style.display = 'none';
+            const endScreen = document.getElementById('end-screen');
+            endScreen.style.display = 'block';
+            
+            if (won) {
+                document.getElementById('end-title').innerText = "Congratulations!";
+                document.getElementById('end-message').innerText = `You finished all questions with ${timeLeft} seconds remaining.`;
+            } else {
+                document.getElementById('end-title').innerText = "Time's Up!";
+                document.getElementById('end-message').innerText = `You made it to question ${currentQuestionIndex + 1}.`;
+            }
+        }
+
+        function resetGame() {
+            document.getElementById('end-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'block';
+        }
+
+        function toggleCheatSheet() {
+            const modal = document.getElementById('cheat-modal');
+            modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+        }
+    </script>
+</body>
+</html>
